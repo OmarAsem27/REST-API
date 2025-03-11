@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdRequest;
 use App\Http\Resources\AdResource;
 use App\Models\Ad;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class AdController extends Controller
 {
@@ -69,8 +71,59 @@ class AdController extends Controller
             $q->where('title', 'LIKE', "%" . $word . "%");
         })->latest()->get();
         if (count($ads) > 0) {
+
             return ApiResponse::sendResponse(200, "Search Completed Successfully", AdResource::collection($ads));
         }
         return ApiResponse::sendResponse(200, 'No Matching Data', []);
     }
+
+    public function create(AdRequest $request)
+    {
+        $data = $request->validated();
+        $data['user_id'] = $request->user()->id;
+        $data['slug'] = Str::slug($request->title);
+        $record = Ad::create($data);
+        if ($record)
+            return ApiResponse::sendResponse(201, 'Ad Created Succfully', new AdResource($record));
+    }
+
+    public function update(AdRequest $request, $ad_id)
+    {
+        $ad = Ad::findOrFail($ad_id);
+        if ($ad->user_id != $request->user()->id) {
+            return ApiResponse::sendResponse(403, "You aren't allowed to take this action", []);
+        }
+        $data = $request->validated();
+        $data['slug'] = Str::slug($request->title);
+        $record = $ad->update($data);
+
+        if ($record)
+            return ApiResponse::sendResponse(201, 'Your Ad Updated Succfully', new AdResource($ad));
+    }
+
+    public function delete(Request $request, $ad_id)
+    {
+        $ad = Ad::findOrFail($ad_id);
+
+        if ($ad->user_id != $request->user()->id) {
+            return ApiResponse::sendResponse(403, "You aren't allowed to take this action", []);
+        }
+        $success = $ad->delete();
+        if ($success)
+            return ApiResponse::sendResponse(200, "Your Ad Deleted Successfully", []);
+
+    }
+
+
+    public function myads(Request $request)
+    {
+        $ads = Ad::where('user_id', $request->user()->id)->get();
+        if (count($ads) > 0) {
+            return ApiResponse::sendResponse(200, "Your Ads Retrieved Successfully", AdResource::collection($ads));
+        }
+
+        return ApiResponse::sendResponse(200, "You don't have any ads", []);
+    }
+
+
 }
